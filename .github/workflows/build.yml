@@ -8,6 +8,7 @@ on:
     paths:
       - prebuilt/kernel
       - prebuilt/dtb.img
+      - .github/workflows/build.yml
 
 permissions:
   contents: read
@@ -34,7 +35,7 @@ jobs:
       ALLOW_MISSING_DEPENDENCIES: "true"
       USE_CCACHE: "1"
       CCACHE_EXEC: /usr/bin/ccache
-      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_DIR: ${{ runner.temp }}/ccache
 
     steps:
       - name: Check out device tree
@@ -98,6 +99,7 @@ jobs:
           cd "$GITHUB_WORKSPACE/android"
           source build/envsetup.sh
           lunch twrp_TB300FU-eng
+          mkdir -p "$CCACHE_DIR"
           ccache -M 5G
           mka -j2 bootimage
 
