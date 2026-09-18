@@ -118,6 +118,34 @@ jobs:
           output_image="$RUNNER_TEMP/twrp-TB300FU-S101116-bringup.img"
 
           test -f "$source_image"
+
+          python3 - "$source_image" <<'PY'
+          import hashlib
+          import struct
+          import sys
+
+          path = sys.argv[1]
+          with open(path, "rb") as stream:
+              image = stream.read()
+
+          assert image[:8] == b"ANDROID!", "invalid boot magic"
+          kernel_size = struct.unpack_from("<I", image, 8)[0]
+          ramdisk_size = struct.unpack_from("<I", image, 16)[0]
+          page_size = struct.unpack_from("<I", image, 36)[0]
+          header_version = struct.unpack_from("<I", image, 40)[0]
+          dtb_size = struct.unpack_from("<I", image, 1648)[0]
+          kernel = image[page_size:page_size + kernel_size]
+          kernel_sha = hashlib.sha256(kernel).hexdigest()
+
+          assert kernel_size == 11843144, f"wrong kernel size: {kernel_size}"
+          assert kernel_sha == "bf458fac663e61a4081de1e7826f9d9e836decfbaea342d172376eae62742188", kernel_sha
+          assert page_size == 2048, f"wrong page size: {page_size}"
+          assert header_version == 2, f"wrong header version: {header_version}"
+          assert dtb_size == 120386, f"wrong DTB size: {dtb_size}"
+          assert kernel[:4] == bytes.fromhex("0000a0e1"), "ARM zImage wrapper is missing"
+          print(f"Verified boot image: kernel={kernel_size}, ramdisk={ramdisk_size}, dtb={dtb_size}, sha256={kernel_sha}")
+          PY
+
           cp "$source_image" "$output_image"
 
           if out/host/linux-x86/bin/avbtool info_image --image "$output_image" >/dev/null 2>&1; then
