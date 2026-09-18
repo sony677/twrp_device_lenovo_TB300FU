@@ -30,6 +30,7 @@ grep -q 'TARGET_FORCE_PREBUILT_KERNEL := true' BoardConfig.mk
 grep -qx 'BOARD_KERNEL_CMDLINE := bootopt=64S3,32S1,32S1' BoardConfig.mk
 grep -q 'BOARD_USES_RECOVERY_AS_BOOT := true' BoardConfig.mk
 grep -q 'TW_HAS_NO_RECOVERY_PARTITION := true' BoardConfig.mk
+grep -q 'TW_NO_FASTBOOT_BOOT := true' BoardConfig.mk
 grep -q 'BOARD_SUPER_PARTITION_SIZE := 4823449600' BoardConfig.mk
 grep -q '/dev/block/by-name/md_udc' recovery/root/system/etc/recovery.fstab
 grep -q 'wait,logical,slotselect' recovery/root/system/etc/recovery.fstab
