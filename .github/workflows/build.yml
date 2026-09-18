@@ -1,0 +1,134 @@
+name: Build TWRP boot image
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: twrp-TB300FU-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out device tree
+        uses: actions/checkout@v4
+
+      - name: Validate tree and stock prebuilts
+        run: bash scripts/validate-tree.sh --require-prebuilts
+
+  build:
+    needs: validate
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+    env:
+      ALLOW_MISSING_DEPENDENCIES: "true"
+      USE_CCACHE: "1"
+      CCACHE_EXEC: /usr/bin/ccache
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+
+    steps:
+      - name: Check out device tree
+        uses: actions/checkout@v4
+        with:
+          path: tree
+
+      - name: Free runner disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android/sdk
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          df -h
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            bc bison build-essential ccache curl flex g++-multilib gcc-multilib \
+            git git-lfs gnupg gperf imagemagick lib32ncurses-dev lib32readline-dev \
+            lib32z1-dev libelf-dev liblz4-tool libncurses-dev libsdl1.2-dev \
+            libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool \
+            squashfs-tools xsltproc zip zlib1g-dev
+
+      - name: Configure Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "11"
+
+      - name: Install repo
+        run: |
+          mkdir -p "$HOME/bin"
+          curl -fsSL https://storage.googleapis.com/git-repo-downloads/repo -o "$HOME/bin/repo"
+          chmod 0755 "$HOME/bin/repo"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Sync TWRP 12.1 sources
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/android"
+          cd "$GITHUB_WORKSPACE/android"
+          "$HOME/bin/repo" init \
+            -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp.git \
+            -b twrp-12.1 \
+            --depth=1
+          "$HOME/bin/repo" sync -c -j2 --force-sync --no-clone-bundle --no-tags
+
+      - name: Install TB300FU device tree
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/android/device/lenovo/TB300FU"
+          rsync -a \
+            --exclude='.git/' \
+            --exclude='.github/' \
+            --exclude='.ccache/' \
+            "$GITHUB_WORKSPACE/tree/" \
+            "$GITHUB_WORKSPACE/android/device/lenovo/TB300FU/"
+
+      - name: Build recovery-as-boot image
+        run: |
+          cd "$GITHUB_WORKSPACE/android"
+          source build/envsetup.sh
+          lunch twrp_TB300FU-eng
+          ccache -M 5G
+          mka -j2 bootimage
+
+      - name: Add unsigned AVB footer and inspect image
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE/android"
+          source_image="out/target/product/TB300FU/boot.img"
+          output_image="$RUNNER_TEMP/twrp-TB300FU-S101116-bringup.img"
+
+          test -f "$source_image"
+          cp "$source_image" "$output_image"
+
+          if out/host/linux-x86/bin/avbtool info_image --image "$output_image" >/dev/null 2>&1; then
+            echo "The build already produced an AVB footer."
+          else
+            image_size=$(stat -c '%s' "$output_image")
+            if (( image_size >= 33554432 )); then
+              echo "Image is too large for the 32 MiB boot partition: $image_size bytes." >&2
+              exit 1
+            fi
+            out/host/linux-x86/bin/avbtool add_hash_footer \
+              --image "$output_image" \
+              --partition_name boot \
+              --partition_size 33554432 \
+              --algorithm NONE
+          fi
+
+          test "$(stat -c '%s' "$output_image")" = "33554432"
+          test "$(head -c 8 "$output_image")" = "ANDROID!"
+          sha256sum "$output_image"
+          out/host/linux-x86/bin/avbtool info_image --image "$output_image"
+
+      - name: Upload TWRP image
+        uses: actions/upload-artifact@v4
+        with:
+          name: twrp-TB300FU-S101116-bringup
+          path: ${{ runner.temp }}/twrp-TB300FU-S101116-bringup.img
+          if-no-files-found: error
+          retention-days: 14
