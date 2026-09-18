@@ -39,7 +39,7 @@ BOARD_RAMDISK_OFFSET := 0x11b00000
 BOARD_KERNEL_TAGS_OFFSET := 0x07880000
 BOARD_DTB_OFFSET := 0x07880000
 BOARD_KERNEL_PAGESIZE := 2048
-# The build system appends twrpfastboot=1 and buildvariant=eng.
+# The TWRP build appends buildvariant=eng. Do not force recovery on normal boot.
 BOARD_KERNEL_CMDLINE := bootopt=64S3,32S1,32S1
 BOARD_MKBOOTIMG_ARGS += --header_version $(BOARD_BOOTIMG_HEADER_VERSION)
 BOARD_MKBOOTIMG_ARGS += --kernel_offset $(BOARD_KERNEL_OFFSET)
@@ -101,6 +101,8 @@ TW_NO_SCREEN_BLANK := true
 TW_SCREEN_BLANK_ON_BOOT := false
 TW_HAS_MTP := true
 TW_EXCLUDE_DEFAULT_USB_INIT := true
+# Keep fastbootd support, but omit twrpfastboot=1 so normal boot can reach Android.
+TW_NO_FASTBOOT_BOOT := true
 TW_INCLUDE_FASTBOOTD := true
 TW_INCLUDE_LPDUMP := true
 TW_INCLUDE_LPTOOLS := true
