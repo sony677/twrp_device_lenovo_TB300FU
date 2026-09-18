@@ -115,7 +115,7 @@ jobs:
           set -euo pipefail
           cd "$GITHUB_WORKSPACE/android"
           source_image="out/target/product/TB300FU/boot.img"
-          output_image="$RUNNER_TEMP/twrp-TB300FU-S101116-bringup.img"
+          output_image="$RUNNER_TEMP/twrp-TB300FU-S101116-no-fastboot-loop.img"
 
           test -f "$source_image"
 
@@ -136,6 +136,9 @@ jobs:
           dtb_size = struct.unpack_from("<I", image, 1648)[0]
           kernel = image[page_size:page_size + kernel_size]
           kernel_sha = hashlib.sha256(kernel).hexdigest()
+          primary_cmdline = image[64:576].split(b"\0", 1)[0]
+          extra_cmdline = image[608:1632].split(b"\0", 1)[0]
+          cmdline = b" ".join((primary_cmdline + b" " + extra_cmdline).split()).decode("ascii")
 
           assert kernel_size == 11843144, f"wrong kernel size: {kernel_size}"
           assert kernel_sha == "bf458fac663e61a4081de1e7826f9d9e836decfbaea342d172376eae62742188", kernel_sha
@@ -143,7 +146,11 @@ jobs:
           assert header_version == 2, f"wrong header version: {header_version}"
           assert dtb_size == 120386, f"wrong DTB size: {dtb_size}"
           assert kernel[:4] == bytes.fromhex("0000a0e1"), "ARM zImage wrapper is missing"
+          assert "twrpfastboot=" not in cmdline, f"normal-boot loop flag remains: {cmdline}"
+          assert "bootopt=64S3,32S1,32S1" in cmdline, f"stock boot options are missing: {cmdline}"
+          assert cmdline.count("buildvariant=") == 1, f"duplicate buildvariant: {cmdline}"
           print(f"Verified boot image: kernel={kernel_size}, ramdisk={ramdisk_size}, dtb={dtb_size}, sha256={kernel_sha}")
+          print(f"Verified normal-boot cmdline: {cmdline}")
           PY
 
           cp "$source_image" "$output_image"
@@ -171,7 +178,7 @@ jobs:
       - name: Upload TWRP image
         uses: actions/upload-artifact@v4
         with:
-          name: twrp-TB300FU-S101116-bringup
-          path: ${{ runner.temp }}/twrp-TB300FU-S101116-bringup.img
+          name: twrp-TB300FU-S101116-no-fastboot-loop
+          path: ${{ runner.temp }}/twrp-TB300FU-S101116-no-fastboot-loop.img
           if-no-files-found: error
           retention-days: 14
