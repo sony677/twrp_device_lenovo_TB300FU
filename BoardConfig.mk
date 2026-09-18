@@ -100,7 +100,7 @@ TW_EXTRA_LANGUAGES := false
 TW_NO_SCREEN_BLANK := true
 TW_SCREEN_BLANK_ON_BOOT := false
 TW_HAS_MTP := true
-TW_EXCLUDE_DEFAULT_USB_INIT := true
+# Use TWRP's maintained ConfigFS USB init; hardware properties stay in the MTK rc.
 # Keep fastbootd support, but omit twrpfastboot=1 so normal boot can reach Android.
 TW_NO_FASTBOOT_BOOT := true
 TW_INCLUDE_FASTBOOTD := true
