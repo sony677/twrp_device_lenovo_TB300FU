@@ -115,7 +115,7 @@ jobs:
           set -euo pipefail
           cd "$GITHUB_WORKSPACE/android"
           source_image="out/target/product/TB300FU/boot.img"
-          output_image="$RUNNER_TEMP/twrp-TB300FU-S101116-no-fastboot-loop.img"
+          output_image="$RUNNER_TEMP/twrp-TB300FU-S101116-usb-default.img"
 
           test -f "$source_image"
 
@@ -178,7 +178,7 @@ jobs:
       - name: Upload TWRP image
         uses: actions/upload-artifact@v4
         with:
-          name: twrp-TB300FU-S101116-no-fastboot-loop
-          path: ${{ runner.temp }}/twrp-TB300FU-S101116-no-fastboot-loop.img
+          name: twrp-TB300FU-S101116-usb-default
+          path: ${{ runner.temp }}/twrp-TB300FU-S101116-usb-default.img
           if-no-files-found: error
           retention-days: 14
