@@ -71,6 +71,13 @@ BOARD_MAIN_SIZE := 4819255296
 BOARD_MAIN_PARTITION_LIST := system vendor product
 BOARD_BUILD_SUPER_IMAGE_BY_DEFAULT := false
 
+# System-as-root and separated output trees.
+# This prevents recovery HAL files from creating recovery/root/vendor before
+# the base ramdisk installs its /vendor symlink.
+BOARD_BUILD_SYSTEM_ROOT_IMAGE := false
+TARGET_COPY_OUT_VENDOR := vendor
+TARGET_COPY_OUT_PRODUCT := product
+
 # Filesystems.
 BOARD_USERDATAIMAGE_FILE_SYSTEM_TYPE := f2fs
 TARGET_USERIMAGES_USE_EXT4 := true
