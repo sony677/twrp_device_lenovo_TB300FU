@@ -1,0 +1,5 @@
+*.log
+*.img
+!prebuilt/dtb.img
+out/
+.repo/
