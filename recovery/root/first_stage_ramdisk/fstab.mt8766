@@ -1,0 +1,6 @@
+# ro.boot.hardware is mt8766 on the TB300FU; layout is shared with mt6761.
+system                                           /system          ext4    ro                                        wait,logical,slotselect,first_stage_mount
+vendor                                           /vendor          ext4    ro                                        wait,logical,slotselect,first_stage_mount
+product                                          /product         ext4    ro                                        wait,logical,slotselect,first_stage_mount
+/dev/block/by-name/md_udc                        /metadata        ext4    noatime,nosuid,nodev,discard                wait,check,formattable,first_stage_mount
+/dev/block/by-name/userdata                      /data            f2fs    noatime,nosuid,nodev,discard,noflush_merge latemount,wait,check,quota,reservedsize=128M,formattable,resize,checkpoint=fs
