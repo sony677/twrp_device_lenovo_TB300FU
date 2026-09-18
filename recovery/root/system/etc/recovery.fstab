@@ -1,0 +1,19 @@
+# Lenovo TB300FU / tc422_wifi
+# Initial bring-up fstab: AVB enforcement and credential decryption are deferred.
+
+system                                           /system          ext4    ro                                        wait,logical,slotselect
+vendor                                           /vendor          ext4    ro                                        wait,logical,slotselect
+product                                          /product         ext4    ro                                        wait,logical,slotselect
+
+/dev/block/by-name/md_udc                        /metadata        ext4    noatime,nosuid,nodev,discard                wait,check,formattable,first_stage_mount
+/dev/block/by-name/userdata                      /data            f2fs    noatime,nosuid,nodev,discard,noflush_merge latemount,wait,check,quota,reservedsize=128M,formattable,resize,checkpoint=fs
+/dev/block/by-name/para                          /misc            emmc    defaults                                  defaults
+
+/dev/block/by-name/boot                          /boot            emmc    defaults                                  slotselect
+/dev/block/by-name/dtbo                          /dtbo            emmc    defaults                                  slotselect
+/dev/block/by-name/vbmeta                        /vbmeta          emmc    defaults                                  slotselect
+/dev/block/by-name/vbmeta_system                 /vbmeta_system   emmc    defaults                                  slotselect
+/dev/block/by-name/vbmeta_vendor                 /vbmeta_vendor   emmc    defaults                                  slotselect
+
+/devices/platform/externdevice*                  /external_sd     auto    defaults                                  voldmanaged=external_sd:auto
+/devices/platform/mt_usb*                        /usb_otg         auto    defaults                                  voldmanaged=usb_otg:auto
