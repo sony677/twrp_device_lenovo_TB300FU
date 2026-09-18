@@ -11,7 +11,6 @@ required=(
   twrp_TB300FU.mk
   recovery/root/init.recovery.mt6761.rc
   recovery/root/init.recovery.mt8766.rc
-  recovery/root/init.recovery.usb.rc
   recovery/root/system/etc/recovery.fstab
   recovery/root/first_stage_ramdisk/fstab.mt6761
   recovery/root/first_stage_ramdisk/fstab.mt8766
@@ -34,8 +33,29 @@ grep -q 'TW_NO_FASTBOOT_BOOT := true' BoardConfig.mk
 grep -q 'BOARD_SUPER_PARTITION_SIZE := 4823449600' BoardConfig.mk
 grep -q '/dev/block/by-name/md_udc' recovery/root/system/etc/recovery.fstab
 grep -q 'wait,logical,slotselect' recovery/root/system/etc/recovery.fstab
-grep -q 'sys.usb.controller musb-hdrc' recovery/root/init.recovery.usb.rc
 grep -q 'PLATFORM_SECURITY_PATCH := 2026-01-01' twrp_TB300FU.mk
+
+if grep -q 'TW_EXCLUDE_DEFAULT_USB_INIT' BoardConfig.mk; then
+  echo "Do not exclude TWRP's maintained init.recovery.usb.rc." >&2
+  exit 1
+fi
+
+if grep -q 'init.recovery.usb.rc:' device.mk; then
+  echo "Do not copy a device-local init.recovery.usb.rc over TWRP's default." >&2
+  exit 1
+fi
+
+for rc in recovery/root/init.recovery.mt6761.rc recovery/root/init.recovery.mt8766.rc; do
+  grep -qx 'import /init.recovery.usb.rc' "$rc"
+  grep -q 'setprop sys.usb.configfs 1' "$rc"
+  grep -q 'setprop sys.usb.ffs.aio_compat 0' "$rc"
+  grep -q 'setprop sys.usb.controller musb-hdrc' "$rc"
+  grep -q 'setprop vendor.usb.controller musb-hdrc' "$rc"
+  if grep -q '/device/cmode' "$rc"; then
+    echo "Obsolete cmode write remains in $rc." >&2
+    exit 1
+  fi
+done
 
 if [[ "${1:-}" == "--require-prebuilts" ]]; then
   test -f prebuilt/kernel || { echo "Upload prebuilt/kernel first." >&2; exit 1; }
