@@ -6,9 +6,16 @@ on:
     branches:
       - main
     paths:
+      - .github/workflows/build.yml
+      - Android.mk
+      - AndroidProducts.mk
+      - BoardConfig.mk
+      - device.mk
+      - twrp_TB300FU.mk
       - prebuilt/kernel
       - prebuilt/dtb.img
-      - .github/workflows/build.yml
+      - recovery/**
+      - scripts/**
 
 permissions:
   contents: read
