@@ -1,12 +1,12 @@
 # Lenovo TB300FU / tc422_wifi
-# Initial bring-up fstab: AVB enforcement and credential decryption are deferred.
+# Preserve stock encryption descriptors; they do not implement the missing crypto HAL integration.
 
 system                                           /system          ext4    ro                                        wait,logical,slotselect
 vendor                                           /vendor          ext4    ro                                        wait,logical,slotselect
 product                                          /product         ext4    ro                                        wait,logical,slotselect
 
 /dev/block/by-name/md_udc                        /metadata        ext4    noatime,nosuid,nodev,discard                wait,check,formattable,first_stage_mount
-/dev/block/by-name/userdata                      /data            f2fs    noatime,nosuid,nodev,discard,noflush_merge latemount,wait,check,quota,reservedsize=128M,formattable,resize,checkpoint=fs
+/dev/block/by-name/userdata                      /data            f2fs    noatime,nosuid,nodev,discard,noflush_merge,inlinecrypt latemount,wait,check,quota,reservedsize=128M,formattable,resize,checkpoint=fs,fileencryption=aes-256-xts:aes-256-cts:v2,keydirectory=/metadata/vold/metadata_encryption
 /dev/block/by-name/para                          /misc            emmc    defaults                                  defaults
 
 /dev/block/by-name/boot                          /boot            emmc    defaults                                  slotselect

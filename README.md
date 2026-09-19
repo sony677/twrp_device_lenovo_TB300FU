@@ -1,87 +1,69 @@
 # TWRP device tree for Lenovo TB300FU
 
-Experimental TWRP 12.1 bring-up for the Lenovo Tab M8 (4th Gen), model **TB300FU**.
+Experimental TWRP 12.1 for Lenovo Tab M8 (4th Gen), **TB300FU**.
 
 > [!WARNING]
-> This tree is not yet confirmed bootable. Do not flash a generated image unless you have the exact stock `boot.img`, an unlocked bootloader, working fastboot access, and a tested recovery procedure.
+> This is a bring-up tree, not a production recovery. Data decryption is not
+> implemented/verified. Do not format storage to work around a failed mount.
+> Keep the exact stock boot image and a tested fastboot recovery path.
 
-## Verified target
+## Target and observed status
 
-- Device: `TB300FU` / board `tc422_wifi`
-- Platform: MediaTek `mt6761` / hardware `mt8766`
-- Architecture: ARM32 (`armeabi-v7a`)
-- Firmware: `TB300FU_S101116_251224_ROW`
-- Fingerprint: `Lenovo/TB300FU_S/TB300FU:13/TP1A.220624.014/S101116_251224_ROW:user/release-keys`
-- Boot header: v2, page size 2048
-- Boot partition: 32 MiB, A/B, recovery-as-boot
-- Dynamic partitions: `system`, `vendor`, `product`
-- Virtual A/B enabled
-- Display: 800x1280, 240 dpi
-- Touch: FocalTech `fts_ts` / `mtk-tpd`
-- Metadata block: `/dev/block/by-name/md_udc`
-- `vendor_boot_a/b` exist but are zero-filled on the inspected firmware
+- Firmware: `TB300FU_S101116_251224_ROW`, Android 13, shipping API 31.
+- ARM32, platform `mt6761`, hardware `mt8766`, board `tc422_wifi`.
+- Boot header v2, page size 2048, boot partition 32 MiB, A/B recovery-as-boot.
+- Dynamic partitions: system, vendor and product; virtual A/B.
+- Display: 800x1280, 240 dpi.
+- Owner verified TWRP UI, touch and correct orientation with the corrected
+  zImage build, and normal Android boot with subsequent builds.
+- Recovery ADB was verified in **ADB-only** mode. This branch excludes MTP to
+  preserve that mode; this configuration change still needs a fresh build and
+  a device test.
+- /data is not mounted/decrypted in recovery. Android can mount it.
+- /metadata uses **/dev/block/by-name/md_udc (p7)**, not the distinct partition
+  named metadata (p8).
 
-## Current scope
+See [the diagnostic and integration plan](docs/CRYPTO_BRINGUP.md) and
+[scripts/Collect-TB300FU.ps1](scripts/Collect-TB300FU.ps1).
 
-The first milestone is intentionally small:
+## Required prebuilts
 
-1. Build a correctly packed `boot.img`.
-2. Boot the TWRP interface.
-3. Verify display, touch, buttons, ADB and slot handling.
-4. Verify dynamic-partition discovery and fastbootd.
-5. Add FBE/metadata decryption only after the base recovery is stable.
+The repository includes the exact stock kernel and DTB. Preserve their bytes:
 
-Credential decryption is **not implemented or claimed** in this initial tree. The stock firmware uses metadata encryption, inline encryption and a Microtrust/Beanpod TEE stack.
+| File | Size | SHA-256 |
+| --- | ---: | --- |
+| prebuilt/kernel | 11,843,144 | bf458fac663e61a4081de1e7826f9d9e836decfbaea342d172376eae62742188 |
+| prebuilt/dtb.img | 120,386 | 62f52392b931de231b83f704e6470232070ea447016aff3887b70fa91419eff2 |
 
-## Required local prebuilts
+The kernel must contain the ARM **zImage wrapper**. The 11,824,113-byte gzip
+payload emitted by magiskboot unpack is not a substitute. The earlier build #5
+used that incomplete payload and failed to boot; it is not a recommended artifact.
 
-Binary firmware files are intentionally not committed by the initial scaffold. Before running the build workflow, add:
+## Build and validation
 
-- `prebuilt/kernel` — 11,824,113 bytes, extracted from the exact stock `boot.img` with `magiskboot unpack -n`
-- `prebuilt/dtb.img` — 120,386 bytes, extracted from the same image
+The **Build TWRP boot image** workflow syncs the TWRP 12.1 minimal manifest,
+installs this tree at `device/lenovo/TB300FU`, builds bootimage, adds an unsigned
+AVB hash footer for the 32 MiB boot partition and uploads an artifact.
+A successful build does not prove device compatibility.
 
-The GitHub workflow rejects missing or incorrectly sized prebuilts before starting the Android source sync.
+The separate **Check USB and crypto preparation** workflow tests configuration
+invariants and the read-only collector. It does not produce a flashable image.
+Crypto remains gated off until exact stock services/dependencies are integrated;
+enabling the optional profile without that integration produces an explicit error.
 
-## Build
+## Recovery precautions
 
-Run the **Build TWRP boot image** workflow manually from the Actions tab. It syncs the TWRP 12.1 minimal manifest, places this repository at `device/lenovo/TB300FU`, builds `bootimage`, adds an unsigned AVB hash footer for the 32 MiB boot partition, and uploads the result as an artifact.
+Keep the original `image/boot.img` for this exact firmware:
+SHA-256 `ddb66c682298c5c3360718c76e3cd343174499679c97a6232daeadf16a65bc4b`.
 
-## Latest build
+Verify the current slot before any explicitly planned flash. Do not flash the
+inactive slot or alter preloader, lk, tee, nvram, nvdata, seccfg, super, userdata,
+or metadata as a workaround for recovery decryption. Do not relock the bootloader
+with a custom boot image.
 
-GitHub Actions run [#5](https://github.com/sony677/twrp_device_lenovo_TB300FU/actions/runs/35300693918) completed successfully.
+## Remaining work
 
-- Artifact: `twrp-TB300FU-S101116-bringup`
-- Image: `twrp-TB300FU-S101116-bringup.img`
-- Final size: 33,554,432 bytes
-- Original packed image size before AVB padding: 30,773,248 bytes
-- Image SHA-256: `3eea8804e3f33f424e17eb066e34a14bcad59c1a627b31ec35a45168e2772267`
-- AVB footer: version 1.0, partition `boot`, algorithm `NONE`
-
-This confirms compilation and image structure only. Device boot, display, touch and ADB remain untested.
-
-## Recovery path
-
-Keep the exact stock image available:
-
-```powershell
-fastboot getvar current-slot
-fastboot flash boot_b .\image\boot.img
-fastboot reboot
-```
-
-Replace `boot_b` with the slot reported by fastboot. Never flash `preloader`, `lk`, `tee`, `nvram`, `nvdata` or `seccfg` during TWRP bring-up.
-
-## Status
-
-- [x] Stock boot header and addresses documented
-- [x] Stock ramdisk/fstab inspected
-- [x] Kernel and DTB extracted
-- [x] A/B and dynamic-partition layout documented
-- [x] Text tree validated by GitHub Actions
-- [x] TWRP image compiled and structurally verified
-- [ ] Image flashed to the active test slot
-- [ ] UI/display verified
-- [ ] Touch/buttons verified
-- [ ] ADB verified in recovery
-- [ ] Dynamic partitions verified
-- [ ] Data decryption implemented
+- Rebuild and device-test automatic ADB-only startup.
+- Integrate stock Beanpod/Microtrust services and dependencies.
+- Verify metadata decryption, then file/credential decryption.
+- Verify dynamic partition operations, fastbootd, external SD and MTP separately.

@@ -99,14 +99,16 @@ TW_DEFAULT_LANGUAGE := en
 TW_EXTRA_LANGUAGES := false
 TW_NO_SCREEN_BLANK := true
 TW_SCREEN_BLANK_ON_BOOT := false
-TW_HAS_MTP := true
+# ADB-only until the MTP ConfigFS composition is implemented and tested.
+# TW_HAS_MTP := false does not disable MTP in TWRP 12.1; use this flag.
+TW_EXCLUDE_MTP := true
 # Use TWRP's maintained ConfigFS USB init; hardware properties stay in the MTK rc.
 # Keep fastbootd support, but omit twrpfastboot=1 so normal boot can reach Android.
 TW_NO_FASTBOOT_BOOT := true
 TW_INCLUDE_FASTBOOTD := true
 TW_INCLUDE_LPDUMP := true
 TW_INCLUDE_LPTOOLS := true
-TW_INCLUDE_RESETPROP := true
+TW_INCLUDE_LIBRESETPROP := true
 TW_INCLUDE_TWRPAPP := false
 TW_PREPARE_DATA_MEDIA_EARLY := true
 RECOVERY_SDCARD_ON_DATA := true
@@ -118,5 +120,9 @@ TARGET_USES_LOGD := true
 # AVB footer is added explicitly by the build workflow with algorithm NONE.
 BOARD_AVB_ENABLE := false
 
-# Initial bring-up deliberately excludes credential/FBE decryption.
-# Add the Microtrust/Beanpod services and crypto flags only after UI/ADB is stable.
+# Crypto is a separate bring-up profile: do not ship an image that silently
+# lacks the stock TEE/Keymaster integration. See docs/CRYPTO_BRINGUP.md.
+TB300FU_ENABLE_CRYPTO ?= false
+ifeq ($(TB300FU_ENABLE_CRYPTO),true)
+include $(DEVICE_PATH)/config/BoardConfigCrypto.mk
+endif
