@@ -28,3 +28,11 @@ jobs:
         if: ${{ !cancelled() }}
         shell: pwsh
         run: ./tests/Test-Collector.ps1
+      - name: Test offline analyzer in Windows PowerShell 5.1
+        if: ${{ !cancelled() }}
+        shell: powershell
+        run: ./tests/Test-Analyzer.ps1
+      - name: Test offline analyzer in PowerShell 7
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        run: ./tests/Test-Analyzer.ps1

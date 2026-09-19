@@ -13,8 +13,10 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/recovery/root/first_stage_ramdisk/fstab.mt6761:$(TARGET_COPY_OUT_RECOVERY)/root/first_stage_ramdisk/fstab.mt6761 \
     $(LOCAL_PATH)/recovery/root/first_stage_ramdisk/fstab.mt8766:$(TARGET_COPY_OUT_RECOVERY)/root/first_stage_ramdisk/fstab.mt8766
 
-# This profile must be completed with the exact stock Beanpod/Microtrust HALs.
+# Experimental profile; services use this tablet's mounted stock vendor.
 ifeq ($(TB300FU_ENABLE_CRYPTO),true)
+PRODUCT_PACKAGES += tb300fu_crypto_probe
 PRODUCT_COPY_FILES += \
-    $(LOCAL_PATH)/recovery/root/init.recovery.crypto.rc:$(TARGET_COPY_OUT_RECOVERY)/root/init.recovery.crypto.rc
+    $(LOCAL_PATH)/recovery/root/init.recovery.crypto.rc:$(TARGET_COPY_OUT_RECOVERY)/root/init.recovery.crypto.rc \
+    $(LOCAL_PATH)/recovery/root/system/bin/tb300fu-crypto-prepare.sh:$(TARGET_COPY_OUT_RECOVERY)/root/system/bin/tb300fu-crypto-prepare.sh
 endif

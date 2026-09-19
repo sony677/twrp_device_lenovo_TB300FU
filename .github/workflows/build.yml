@@ -2,9 +2,15 @@ name: Build TWRP boot image
 
 on:
   workflow_dispatch:
+    inputs:
+      crypto:
+        description: Build the experimental Beanpod metadata/FBE integration
+        type: boolean
+        default: false
   push:
     branches:
       - main
+      - codex/adb-crypto-preparation
     paths:
       - .github/workflows/build.yml
       - Android.mk
@@ -16,6 +22,12 @@ on:
       - prebuilt/dtb.img
       - recovery/**
       - scripts/**
+      - config/**
+      - crypto/**
+      - tests/**
+
+env:
+  TB300FU_ENABLE_CRYPTO: ${{ (github.ref == 'refs/heads/codex/adb-crypto-preparation' || inputs.crypto == true) && 'true' || 'false' }}
 
 permissions:
   contents: read
@@ -33,6 +45,16 @@ jobs:
 
       - name: Validate tree and stock prebuilts
         run: bash scripts/validate-tree.sh --require-prebuilts
+
+      - name: Test preparation, fail-closed paths and configuration
+        run: python3 -m unittest discover -s tests -p 'test_*.py' -v
+
+      - name: Verify crypto patch against pinned upstream source
+        run: |
+          mkdir -p "$RUNNER_TEMP/twrp-patch-test"
+          curl -fsSL https://raw.githubusercontent.com/TeamWin/android_bootable_recovery/5c3d206a5eeb3d446bcda8248a405a4b278bab5c/partitionmanager.cpp -o "$RUNNER_TEMP/twrp-patch-test/partitionmanager.cpp"
+          python3 scripts/patch-twrp-crypto.py "$RUNNER_TEMP/twrp-patch-test"
+          python3 scripts/patch-twrp-crypto.py "$RUNNER_TEMP/twrp-patch-test"
 
   build:
     needs: validate
@@ -101,21 +123,46 @@ jobs:
             "$GITHUB_WORKSPACE/tree/" \
             "$GITHUB_WORKSPACE/android/device/lenovo/TB300FU/"
 
+      - name: Apply experimental pre-metadata integration
+        if: env.TB300FU_ENABLE_CRYPTO == 'true'
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE/android/bootable/recovery"
+          git fetch --depth=1 https://github.com/TeamWin/android_bootable_recovery.git 5c3d206a5eeb3d446bcda8248a405a4b278bab5c
+          git checkout --detach 5c3d206a5eeb3d446bcda8248a405a4b278bab5c
+          python3 "$GITHUB_WORKSPACE/tree/scripts/patch-twrp-crypto.py" .
+          echo 'TB300FU_CRYPTO_HOOK_APPLIED=true' >> "$GITHUB_ENV"
+
       - name: Build recovery-as-boot image
         run: |
+          set -eo pipefail
           cd "$GITHUB_WORKSPACE/android"
           source build/envsetup.sh
           lunch twrp_TB300FU-eng
           mkdir -p "$CCACHE_DIR"
           ccache -M 5G
-          mka -j2 bootimage
+          mka -j2 bootimage 2>&1 | tee "$RUNNER_TEMP/tb300fu-build.log"
+
+      - name: Check experimental ramdisk contents
+        if: env.TB300FU_ENABLE_CRYPTO == 'true'
+        run: |
+          set -euo pipefail
+          root="$GITHUB_WORKSPACE/android/out/target/product/TB300FU/recovery/root"
+          test -s "$root/system/bin/tb300fu-crypto-prepare.sh"
+          test -x "$root/system/bin/tb300fu_crypto_probe"
+          test -x "$root/system/bin/keystore2"
+          test -s "$root/init.recovery.crypto.rc"
+          grep -q /tmp/misc/keystore "$root/system/etc/init/keystore2.rc"
 
       - name: Add unsigned AVB footer and inspect image
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE/android"
           source_image="out/target/product/TB300FU/boot.img"
-          output_image="$RUNNER_TEMP/twrp-TB300FU-S101116-usb-default.img"
+          profile=usb-default
+          if [ "$TB300FU_ENABLE_CRYPTO" = true ]; then profile=crypto-experimental; fi
+          output_image="$RUNNER_TEMP/twrp-TB300FU-S101116-$profile.img"
+          echo "TB300FU_ARTIFACT=twrp-TB300FU-S101116-$profile" >> "$GITHUB_ENV"
 
           test -f "$source_image"
 
@@ -146,6 +193,8 @@ jobs:
           assert header_version == 2, f"wrong header version: {header_version}"
           assert dtb_size == 120386, f"wrong DTB size: {dtb_size}"
           assert kernel[:4] == bytes.fromhex("0000a0e1"), "ARM zImage wrapper is missing"
+          ramdisk_offset = page_size + ((kernel_size + page_size - 1) // page_size) * page_size
+          assert image[ramdisk_offset:ramdisk_offset + 2] == bytes.fromhex("1f8b"), "stock kernel requires gzip ramdisk"
           assert "twrpfastboot=" not in cmdline, f"normal-boot loop flag remains: {cmdline}"
           assert "bootopt=64S3,32S1,32S1" in cmdline, f"stock boot options are missing: {cmdline}"
           assert cmdline.count("buildvariant=") == 1, f"duplicate buildvariant: {cmdline}"
@@ -178,7 +227,16 @@ jobs:
       - name: Upload TWRP image
         uses: actions/upload-artifact@v4
         with:
-          name: twrp-TB300FU-S101116-usb-default
-          path: ${{ runner.temp }}/twrp-TB300FU-S101116-usb-default.img
+          name: ${{ env.TB300FU_ARTIFACT }}
+          path: ${{ runner.temp }}/${{ env.TB300FU_ARTIFACT }}.img
           if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tb300fu-build-diagnostics-${{ github.run_id }}
+          path: ${{ runner.temp }}/tb300fu-build.log
+          if-no-files-found: ignore
           retention-days: 14

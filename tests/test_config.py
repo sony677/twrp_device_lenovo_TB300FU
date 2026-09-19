@@ -27,15 +27,21 @@ class ConfigTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             checks.check_fstab(self.fstab.replace("/by-name/userdata", "/mapper/userdata"))
 
-    def test_crypto_profile_fails_before_build_without_stock_services(self):
+    def test_crypto_profile_fails_before_build_without_source_hook(self):
         result = subprocess.run(
             ["make", "-f", "tests/read-board.mk", "DEVICE_PATH=.", "TB300FU_ENABLE_CRYPTO=true"],
             cwd=ROOT, text=True, capture_output=True)
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("crypto integration incomplete", result.stderr)
+        self.assertIn("crypto hook missing", result.stderr)
+
+    def test_experimental_crypto_profile_enables_crypto_with_hook(self):
+        result = subprocess.run(
+            ["make", "-f", "tests/read-board.mk", "DEVICE_PATH=.", "TB300FU_ENABLE_CRYPTO=true",
+             "TB300FU_CRYPTO_HOOK_APPLIED=true"], cwd=ROOT, text=True, capture_output=True, check=True)
+        self.assertEqual(result.stdout.strip(), "mtp_excluded=true crypto=true")
 
     def test_default_profile_keeps_crypto_gated_and_adb_only(self):
-        result = subprocess.run(["make", "-f", "tests/read-board.mk", "DEVICE_PATH=."],
+        result = subprocess.run(["make", "-f", "tests/read-board.mk", "DEVICE_PATH=.", "TB300FU_ENABLE_CRYPTO=false"],
                                 cwd=ROOT, text=True, capture_output=True, check=True)
         self.assertEqual(result.stdout.strip(), "mtp_excluded=true crypto=")
 
