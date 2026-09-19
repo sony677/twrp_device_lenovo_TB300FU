@@ -1,4 +1,6 @@
 import /init.recovery.usb.rc
+# Optional; present only in the completed crypto profile.
+import /init.recovery.crypto.rc
 
 on init
     setprop sys.usb.configfs 1

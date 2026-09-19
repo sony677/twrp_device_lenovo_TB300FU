@@ -1,0 +1,29 @@
+name: Check USB and crypto preparation
+on:
+  push:
+    branches: ['codex/adb-crypto-preparation']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  config:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/validate-tree.sh --require-prebuilts
+      - run: python3 scripts/check-config.py
+      - run: python3 -m unittest discover -s tests -p 'test_*.py' -v
+  collector:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        shell: [powershell, pwsh]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test collector without a device
+        shell: ${{ matrix.shell }}
+        run: ./tests/Test-Collector.ps1

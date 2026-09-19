@@ -87,4 +87,6 @@ if [[ "${1:-}" == "--require-prebuilts" ]]; then
   }
 fi
 
+python3 scripts/check-config.py
+
 echo "TB300FU device-tree validation passed."
