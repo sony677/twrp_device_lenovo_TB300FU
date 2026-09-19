@@ -132,7 +132,7 @@ function Collect-TB300FUEvidence {
 }
 
 if ($MyInvocation.InvocationName -ne '.') {
-    $adbCommand = (Get-Command $AdbPath -CommandType Application -ErrorAction Stop).Source
+    $adbCommand = (Get-Command $AdbPath -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
     $runner = {
         param([string[]]$AdbArguments)
         Invoke-TimedProcess -Program $adbCommand -Arguments $AdbArguments -Seconds $TimeoutSeconds

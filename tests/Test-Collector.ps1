@@ -33,7 +33,7 @@ foreach ($item in (Get-TB300FUReadPlan)) {
 }
 
 # Test actual Windows argument transport, not just the quoting implementation.
-$python = (Get-Command python -CommandType Application).Source
+$python = (Get-Command python -CommandType Application | Select-Object -First 1).Source
 $expected = @('a b', 'literal $HOME $(oops)', 'quote"here', 'C:\folder with spaces\', '', 'ascii')
 $pythonArgs = @('-c', 'import json,sys; print(json.dumps(sys.argv[1:]))') + $expected
 $r = Invoke-TimedProcess -Program $python -Arguments $pythonArgs -Seconds 10
@@ -45,6 +45,14 @@ for ($i = 0; $i -lt $expected.Count; $i++) {
 }
 $r = Invoke-TimedProcess -Program $python -Arguments @('-c', 'import time; time.sleep(10)') -Seconds 1
 Assert-True ($r.ExitCode -eq 124) 'Timeout did not stop the child.'
+
+# Exercise the same closed runner used by the command-line entry point.
+$nativeRunner = {
+    param([string[]]$AdbArguments)
+    Invoke-TimedProcess -Program $python -Arguments $AdbArguments -Seconds 10
+}.GetNewClosure()
+$r = & $nativeRunner @('-c', 'print("runner-ok")')
+Assert-True ($r.ExitCode -eq 0 -and $r.Stdout.Trim() -eq 'runner-ok') 'Closed native runner failed.'
 
 # Fake ADB: exercise the entire collector without hardware or key material.
 $state = @{ Calls = New-Object 'System.Collections.Generic.List[object]' }
