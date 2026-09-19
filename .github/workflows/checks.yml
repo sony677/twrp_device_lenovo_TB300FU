@@ -13,6 +13,11 @@ jobs:
       - uses: actions/checkout@v4
       - run: bash scripts/validate-tree.sh --require-prebuilts
       - run: python3 scripts/check-config.py
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: |
+          python3 -m pip install --only-binary=:all: --no-deps -r scripts/requirements-compression.txt
       - run: python3 -m unittest discover -s tests -p 'test_*.py' -v
   collector:
     runs-on: windows-latest

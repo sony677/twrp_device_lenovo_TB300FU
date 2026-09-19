@@ -101,11 +101,48 @@ The distinct output is `twrp-TB300FU-S101116-crypto-experimental.img`.
 The **32 MiB** boot limit is enforced; oversized images must not be truncated.
 This kernel supports **gzip only**, not LZ4/XZ/LZMA ramdisks.
 
+Build 23 reached final linking but its boot payload was 34,310,144 bytes,
+755,712 bytes above the partition limit, before reserving AVB footer space.
+The experimental profile now excludes optional Bash, Nano and the command-line
+ZIP **creator** using upstream TWRP flags. The normal `/system/bin/sh` terminal,
+ZIP installation, ADB, fastbootd, filesystem tools and crypto remain enabled.
+The default USB-only profile is unchanged.
+
+The host-only encoder `scripts/compress-ramdisk.py` uses pinned Zopfli to produce
+ordinary gzip, with level-9 gzip as a size fallback. It verifies that decompression
+returns **every original CPIO byte**, and emits only gzip to stdout. It never
+filters the archive or modifies the kernel. A 128 MiB input bound and 20-minute
+build timeout limit its resource use. The build recipe patch rejects upstream
+source drift instead of silently skipping the encoder. On the old USB-only
+image, Zopfli saved 526,498 bytes; this is **not** evidence of the crypto image's
+final size. The next build must prove that it fits.
+
+Publication additionally checks `avbtool --calc_max_image_size` and runs the
+offline image gate after adding the footer. A failed build preserves its raw
+CPIO in an explicitly **NONFLASHABLE** diagnostic artifact, plus a size inventory;
+an oversized or invalid image is not published as a TWRP image. Do not flash CPIO.
+
 Hardware acceptance remains pending. After a separately agreed device test,
 collect `/tmp/tb300fu-crypto.log` and recovery.log. Confirm metadata mapping,
 mounted F2FS, then files unlocked using a credential entered **on the tablet**.
 `tb300fu.crypto.ready=1` means services responded, not that storage decrypted.
 Verify normal Android boot afterwards. Do not change USB sysfs for these tests.
+
+### Offline image gate
+
+Before a device test, run the read-only verifier against the downloaded image:
+
+```sh
+python3 scripts/verify-crypto-image.py path/to/twrp-TB300FU-S101116-crypto-experimental.img
+```
+
+It checks the 32 MiB release size, stock boot geometry, exact zImage/DTB hashes,
+gzip/CPIO bounds, packaged ARM32 crypto executables, compiled preparation hook,
+deferred temporary keystore and the md_udc metadata mapping. It reads the archive
+in memory, never extracts files and never invokes ADB or modifies the device.
+Old USB-only/bring-up images are deliberately rejected. A pass is a packaging
+check, **not** AVB authenticity, HAL compatibility or proof of decryption;
+`decryption_verified` remains false until a separate hardware acceptance test.
 
 ## Offline evaluator
 
@@ -138,6 +175,7 @@ do not infer that a failing recovery mount means the user's data is lost.
 
 ```sh
 bash scripts/validate-tree.sh --require-prebuilts
+python3 -m pip install --only-binary=:all: --no-deps -r scripts/requirements-compression.txt
 python3 -m unittest discover -s tests -p 'test_*.py' -v
 ```
 

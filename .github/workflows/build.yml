@@ -46,6 +46,14 @@ jobs:
       - name: Validate tree and stock prebuilts
         run: bash scripts/validate-tree.sh --require-prebuilts
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install host compression test dependency
+        run: |
+          python3 -m pip install --only-binary=:all: --no-deps -r scripts/requirements-compression.txt
+
       - name: Test preparation, fail-closed paths and configuration
         run: python3 -m unittest discover -s tests -p 'test_*.py' -v
 
@@ -56,6 +64,12 @@ jobs:
           curl -fsSL https://raw.githubusercontent.com/TeamWin/android_bootable_recovery/5c3d206a5eeb3d446bcda8248a405a4b278bab5c/etc/init/keystore2.rc -o "$RUNNER_TEMP/twrp-patch-test/etc/init/keystore2.rc"
           python3 scripts/patch-twrp-crypto.py "$RUNNER_TEMP/twrp-patch-test"
           python3 scripts/patch-twrp-crypto.py "$RUNNER_TEMP/twrp-patch-test"
+
+      - name: Verify recovery compression recipe against reviewed build source
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/TeamWin/android_build/1b692e2248609f50a27c48cce53b7445cecdcfc5/core/Makefile -o "$RUNNER_TEMP/twrp-patch-test/Makefile"
+          python3 scripts/patch-ramdisk-build.py "$RUNNER_TEMP/twrp-patch-test/Makefile" /usr/bin/python3 /tmp/compress-ramdisk.py
+          python3 scripts/patch-ramdisk-build.py "$RUNNER_TEMP/twrp-patch-test/Makefile" /usr/bin/python3 /tmp/compress-ramdisk.py
 
   build:
     needs: validate
@@ -89,7 +103,13 @@ jobs:
             git git-lfs gnupg gperf imagemagick lib32ncurses-dev lib32readline-dev \
             lib32z1-dev libelf-dev liblz4-tool libncurses-dev libsdl1.2-dev \
             libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool \
-            squashfs-tools xsltproc zip zlib1g-dev
+            squashfs-tools xsltproc zip zlib1g-dev python3-venv
+
+      - name: Prepare isolated host gzip encoder
+        if: env.TB300FU_ENABLE_CRYPTO == 'true'
+        run: |
+          python3 -m venv "$RUNNER_TEMP/tb300fu-gzip"
+          "$RUNNER_TEMP/tb300fu-gzip/bin/python3" -m pip install --only-binary=:all: --no-deps -r "$GITHUB_WORKSPACE/tree/scripts/requirements-compression.txt"
 
       - name: Configure Java
         uses: actions/setup-java@v4
@@ -134,6 +154,14 @@ jobs:
           python3 "$GITHUB_WORKSPACE/tree/scripts/patch-twrp-crypto.py" .
           echo 'TB300FU_CRYPTO_HOOK_APPLIED=true' >> "$GITHUB_ENV"
 
+      - name: Use verified gzip for experimental recovery ramdisk
+        if: env.TB300FU_ENABLE_CRYPTO == 'true'
+        run: |
+          python3 "$GITHUB_WORKSPACE/tree/scripts/patch-ramdisk-build.py" \
+            "$GITHUB_WORKSPACE/android/build/make/core/Makefile" \
+            "$RUNNER_TEMP/tb300fu-gzip/bin/python3" \
+            "$GITHUB_WORKSPACE/tree/scripts/compress-ramdisk.py"
+
       - name: Build recovery-as-boot image
         run: |
           set -eo pipefail
@@ -152,6 +180,11 @@ jobs:
           test -s "$root/system/bin/tb300fu-crypto-prepare.sh"
           test -x "$root/system/bin/tb300fu_crypto_probe"
           test -x "$root/system/bin/keystore2"
+          test -x "$root/system/bin/sh"
+          test -x "$root/system/bin/toybox"
+          test ! -e "$root/system/bin/bash"
+          test ! -e "$root/system/bin/nano"
+          test ! -e "$root/system/bin/zip"
           test -s "$root/init.recovery.crypto.rc"
           grep -q /tmp/misc/keystore "$root/system/etc/init/keystore2.rc"
 
@@ -209,8 +242,9 @@ jobs:
             echo "The build already produced an AVB footer."
           else
             image_size=$(stat -c '%s' "$output_image")
-            if (( image_size >= 33554432 )); then
-              echo "Image is too large for the 32 MiB boot partition: $image_size bytes." >&2
+            max_payload=$(out/host/linux-x86/bin/avbtool add_hash_footer --partition_size 33554432 --calc_max_image_size)
+            if (( image_size > max_payload )); then
+              echo "Image exceeds payload capacity with AVB footer: $image_size > $max_payload bytes." >&2
               exit 1
             fi
             out/host/linux-x86/bin/avbtool add_hash_footer \
@@ -224,6 +258,9 @@ jobs:
           test "$(head -c 8 "$output_image")" = "ANDROID!"
           sha256sum "$output_image"
           out/host/linux-x86/bin/avbtool info_image --image "$output_image"
+          if [ "$TB300FU_ENABLE_CRYPTO" = true ]; then
+            python3 "$GITHUB_WORKSPACE/tree/scripts/verify-crypto-image.py" "$output_image" | tee "$RUNNER_TEMP/tb300fu-image-check.json"
+          fi
 
       - name: Upload TWRP image
         uses: actions/upload-artifact@v4
@@ -233,11 +270,37 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Record packing sizes even after build failure
+        if: always()
+        run: |
+          product="$GITHUB_WORKSPACE/android/out/target/product/TB300FU"
+          if [ -d "$product/recovery/root" ]; then
+            find "$product/recovery/root" -type f -printf '%s %P\n' | sort -nr > "$RUNNER_TEMP/tb300fu-ramdisk-sizes.txt"
+          fi
+          for name in boot.img ramdisk-recovery.img ramdisk-recovery.cpio; do
+            if [ -f "$product/$name" ]; then
+              stat -c '%s %n' "$product/$name" >> "$RUNNER_TEMP/tb300fu-packing-sizes.txt"
+            fi
+          done
+
+      - name: Preserve failed-build ramdisk for offline diagnosis (not flashable)
+        if: failure() && env.TB300FU_ENABLE_CRYPTO == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tb300fu-ramdisk-debug-NONFLASHABLE-${{ github.run_id }}
+          path: ${{ github.workspace }}/android/out/target/product/TB300FU/ramdisk-recovery.cpio
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Upload build diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: tb300fu-build-diagnostics-${{ github.run_id }}
-          path: ${{ runner.temp }}/tb300fu-build.log
+          path: |
+            ${{ runner.temp }}/tb300fu-build.log
+            ${{ runner.temp }}/tb300fu-ramdisk-sizes.txt
+            ${{ runner.temp }}/tb300fu-packing-sizes.txt
+            ${{ runner.temp }}/tb300fu-image-check.json
           if-no-files-found: ignore
           retention-days: 14
