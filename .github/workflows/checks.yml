@@ -16,14 +16,15 @@ jobs:
       - run: python3 -m unittest discover -s tests -p 'test_*.py' -v
   collector:
     runs-on: windows-latest
-    strategy:
-      matrix:
-        shell: [powershell, pwsh]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Test collector without a device
-        shell: ${{ matrix.shell }}
+      - name: Test collector in Windows PowerShell 5.1
+        shell: powershell
+        run: ./tests/Test-Collector.ps1
+      - name: Test collector in PowerShell 7
+        if: ${{ !cancelled() }}
+        shell: pwsh
         run: ./tests/Test-Collector.ps1
