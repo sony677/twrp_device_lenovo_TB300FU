@@ -73,15 +73,32 @@ def transform(source):
     return source
 
 
+def transform_keystore(source):
+    trigger = 'on late-init\n    start keystore2\n'
+    service = 'service keystore2 /system/bin/keystore2 /tmp/misc/keystore\n'
+    gated = service + '    # TB300FU_CRYPTO_KEYSTORE: start after stock OS binding and HALs.\n    disabled\n'
+    if source.count(gated) == 1 and trigger not in source:
+        return source
+    if source.count(trigger) != 1 or source.count(service) != 1 or 'TB300FU_CRYPTO_' in source:
+        raise ValueError('Unexpected keystore2 init source; refusing partial crypto integration')
+    return source.replace(trigger, '', 1).replace(service, gated, 1)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("recovery_source", type=Path)
     args = parser.parse_args()
     path = args.recovery_source / "partitionmanager.cpp"
+    keystore = args.recovery_source / "etc/init/keystore2.rc"
     original = path.read_text(encoding="utf-8")
     patched = transform(original)
+    original_rc = keystore.read_text(encoding="utf-8")
+    patched_rc = transform_keystore(original_rc)
+    # Validate both inputs before changing either file.
     if patched != original:
         path.write_text(patched, encoding="utf-8")
+    if patched_rc != original_rc:
+        keystore.write_text(patched_rc, encoding="utf-8")
     print("TB300FU pre-metadata hook verified (reviewed upstream " + REVIEWED_REVISION + ")")
 
 

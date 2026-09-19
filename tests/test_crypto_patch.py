@@ -47,6 +47,14 @@ class CryptoPatchTests(unittest.TestCase):
                         output.index('tb300fu-crypto-prepare.sh --run'))
         self.assertIn('stock_property("ro.vendor.build.security_patch", "/vendor")', output)
 
+    def test_keystore_does_not_autostart_before_stock_properties(self):
+        source = 'on late-init\n    start keystore2\n\nservice keystore2 /system/bin/keystore2 /tmp/misc/keystore\n    class early_hal\n'
+        output = self.patch.transform_keystore(source)
+        self.assertNotIn('start keystore2', output)
+        self.assertIn('    disabled\n', output)
+        self.assertIn('/tmp/misc/keystore', output)
+        self.assertEqual(output, self.patch.transform_keystore(output))
+
 
 if __name__ == "__main__":
     unittest.main()

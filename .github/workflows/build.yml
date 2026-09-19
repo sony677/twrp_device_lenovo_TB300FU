@@ -51,8 +51,9 @@ jobs:
 
       - name: Verify crypto patch against pinned upstream source
         run: |
-          mkdir -p "$RUNNER_TEMP/twrp-patch-test"
+          mkdir -p "$RUNNER_TEMP/twrp-patch-test/etc/init"
           curl -fsSL https://raw.githubusercontent.com/TeamWin/android_bootable_recovery/5c3d206a5eeb3d446bcda8248a405a4b278bab5c/partitionmanager.cpp -o "$RUNNER_TEMP/twrp-patch-test/partitionmanager.cpp"
+          curl -fsSL https://raw.githubusercontent.com/TeamWin/android_bootable_recovery/5c3d206a5eeb3d446bcda8248a405a4b278bab5c/etc/init/keystore2.rc -o "$RUNNER_TEMP/twrp-patch-test/etc/init/keystore2.rc"
           python3 scripts/patch-twrp-crypto.py "$RUNNER_TEMP/twrp-patch-test"
           python3 scripts/patch-twrp-crypto.py "$RUNNER_TEMP/twrp-patch-test"
 
