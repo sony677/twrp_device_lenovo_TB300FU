@@ -38,7 +38,8 @@ $expected = @('a b', 'literal $HOME $(oops)', 'quote"here', 'C:\folder with spac
 $pythonArgs = @('-c', 'import json,sys; print(json.dumps(sys.argv[1:]))') + $expected
 $r = Invoke-TimedProcess -Program $python -Arguments $pythonArgs -Seconds 10
 Assert-True ($r.ExitCode -eq 0) ('Native argv test failed: ' + $r.Stderr)
-$actual = @($r.Stdout | ConvertFrom-Json)
+$decoded = ConvertFrom-Json -InputObject $r.Stdout
+$actual = @($decoded)
 Assert-True ($actual.Count -eq $expected.Count) 'Argument count changed.'
 for ($i = 0; $i -lt $expected.Count; $i++) {
     Assert-True ($actual[$i] -ceq $expected[$i]) ('Argument changed at index ' + $i)
@@ -46,13 +47,13 @@ for ($i = 0; $i -lt $expected.Count; $i++) {
 $r = Invoke-TimedProcess -Program $python -Arguments @('-c', 'import time; time.sleep(10)') -Seconds 1
 Assert-True ($r.ExitCode -eq 124) 'Timeout did not stop the child.'
 
-# Exercise the same closed runner used by the command-line entry point.
+# Exercise the same native runner used by the command-line entry point.
 $nativeRunner = {
     param([string[]]$AdbArguments)
     Invoke-TimedProcess -Program $python -Arguments $AdbArguments -Seconds 10
-}.GetNewClosure()
+}
 $r = & $nativeRunner @('-c', 'print("runner-ok")')
-Assert-True ($r.ExitCode -eq 0 -and $r.Stdout.Trim() -eq 'runner-ok') 'Closed native runner failed.'
+Assert-True ($r.ExitCode -eq 0 -and $r.Stdout.Trim() -eq 'runner-ok') 'Native runner failed.'
 
 # Fake ADB: exercise the entire collector without hardware or key material.
 $state = @{ Calls = New-Object 'System.Collections.Generic.List[object]' }

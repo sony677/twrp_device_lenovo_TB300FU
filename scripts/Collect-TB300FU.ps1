@@ -136,6 +136,6 @@ if ($MyInvocation.InvocationName -ne '.') {
     $runner = {
         param([string[]]$AdbArguments)
         Invoke-TimedProcess -Program $adbCommand -Arguments $AdbArguments -Seconds $TimeoutSeconds
-    }.GetNewClosure()
+    }
     Collect-TB300FUEvidence -RequestedSerial $Serial -Destination $OutputDirectory -RunAdb $runner
 }
